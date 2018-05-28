@@ -10,109 +10,114 @@
 #include <cpu-features.h>
 
 
-
+/*@constant int MAX_FEATURE_NUM@*/
 #define MAX_FEATURE_NUM 17
 
 
+/*@observer@*/ /*@null@*/
+static const char *getOneCpuFeatures(int index, uint64_t k);
 
-typedef struct CpuFeatureInfo_s {
+typedef /*@abstract@*/ struct CpuFeatureInfo_s {
     uint64_t featureKey;
     const char *featureMsg;
-} CpuFeatureInfo;
+} T_CpuFeatureInfo;
 
 
 
-const char msgVFPv2[] = "VFPv2:\n" \
+/*@unchecked@*/
+static const char k_msgVFPv2[] = "VFPv2:\n" \
   "CPU supports the VFPv2 instruction set. Many, but not all, ARMv6 CPUs " \
   "support these instructions. VFPv2 is a subset of VFPv3 so this will "\
   "be set whenever VFPv3 is set too.";
 
-const char msgARMv7[] = "ARMv7:\n" \
+/*@unchecked@*/
+static const char k_msgARMv7[] = "ARMv7:\n" \
   "CPU supports the ARMv7-A basic instruction set. This feature is mandated by the 'armeabi-v7a' ABI.";
 
-const char msgVFPv3[] = "VFPv3: \n" \
+static const char k_msgVFPv3[] = "VFPv3: \n" \
   "CPU supports the VFPv3-D16 instruction set, providing hardware FPU support for single and double precision floating point registers. Note that only 16 FPU registers are available by default, unless the D32 bit is set too. This feature is also mandated by the 'armeabi-v7a' ABI.";
 
-const char msgVFP_D32[] = "VFP_D32:\n"\
+static const char k_msgVFP_D32[] = "VFP_D32:\n"\
   "CPU VFP optional extension that provides 32 FPU registers, instead of 16. Note that ARM mandates this feature is the 'NEON' feature is implemented by the CPU.";
 
-const char msgNEON[] = "NEON: \n"\
+static const char k_msgNEON[] = "NEON: \n"\
   "CPU FPU supports \"ARM Advanced SIMD\" instructions, also known as NEON. Note that this mandates the VFP_D32 feature as well, per the ARM Architecture specification.";
 
-const char msgVFP_FP16[] = "VFP_FP16:\n"\
+static const char k_msgVFP_FP16[] = "VFP_FP16:\n"\
   "Half-width floating precision VFP extension. If set, the CPU supports instructions to perform floating-point operations on 16-bit registers. This is part of the VFPv4 specification, but not mandated by any Android ABI.";
 
-const char msgVFP_FMA[] = "VFP_FMA:\n "\
+static const char k_msgVFP_FMA[] = "VFP_FMA:\n "\
   "Fused multiply-accumulate VFP instructions extension. Also part of the VFPv4 specification, but not mandated by any Android ABI.";
 
-const char msgNEON_FMA[] = "NEON_FMA:\n" \
+static const char k_msgNEON_FMA[] = "NEON_FMA:\n" \
   "Fused multiply-accumulate NEON instructions extension. Optional extension from the VFPv4 specification, but not mandated by any Android ABI.";
 
-const char msgIDIV_ARM[] = "IDIV_ARM:\n" \
+static const char k_msgIDIV_ARM[] = "IDIV_ARM:\n" \
   "Integer division available in ARM mode. Only available on recent CPUs (e.g. Cortex-A15).";
 
-const char msgIDIV_THUMB2[] = "IDIV_THUMB2:\n" \
+static const char k_msgIDIV_THUMB2[] = "IDIV_THUMB2:\n" \
   "Integer division available in Thumb-2 mode. Only available "\
   "on recent CPUs (e.g. Cortex-A15).";
 
-const char msgiWMMXt[] = "iWMMXt:\n"\
+static const char k_msgiWMMXt[] = "iWMMXt:\n"\
   "Optional extension that adds MMX registers and operations to an "\
   "ARM CPU. This is only available on a few XScale-based CPU designs "\
   "sold by Marvell. Pretty rare in practice.";
 
-const char msgAES[] = "AES:\n" \
+static const char k_msgAES[] = "AES:\n" \
   "CPU supports AES instructions. These instructions are only "\
   "available for 32-bit applications running on ARMv8 CPU.";
 
-const char msgCRC32[] = "CRC32:\n" \
+static const char k_msgCRC32[] = "CRC32:\n" \
   "CPU supports CRC32 instructions. These instructions are only "\
   "available for 32-bit applications running on ARMv8 CPU.";
 
-const char msgSHA2[] = "SHA2:\n" \
+static const char k_msgSHA2[] = "SHA2:\n" \
   "CPU supports SHA2 instructions. These instructions are only "\
   "available for 32-bit applications running on ARMv8 CPU.";
 
-const char msgSHA1[] = "SHA1:\n" \
+static const char k_msgSHA1[] = "SHA1:\n" \
   "CPU supports SHA1 instructions. These instructions are only " \
   "available for 32-bit applications running on ARMv8 CPU.";
 
-const char msgPMULL[] = "PMULL:\n "\
+static const char k_msgPMULL[] = "PMULL:\n "\
   "CPU supports 64-bit PMULL and PMULL2 instructions. These instructions are only available for 32-bit applications running on ARMv8 CPU.";
 
-const char msgLDREX_STREX[] = "LDREX_STREX:\n" \
+static const char k_msgLDREX_STREX[] = "LDREX_STREX:\n" \
    "Use LDREX and STREX to implement interprocess communication " \
    "in multiple-processor and shared-memory systems. "\
    "For reasons of performance, keep the number of instructions " \
    "between corresponding LDREX and STREX instruction to a minimum";
 
-CpuFeatureInfo allFeatures[] = {
-    { ANDROID_CPU_ARM_FEATURE_ARMv7         , msgARMv7          },
-    { ANDROID_CPU_ARM_FEATURE_VFPv3         , msgVFPv3          },
-    { ANDROID_CPU_ARM_FEATURE_NEON          , msgNEON           },
-    { ANDROID_CPU_ARM_FEATURE_LDREX_STREX   , msgLDREX_STREX    },
-    { ANDROID_CPU_ARM_FEATURE_VFPv2         , msgVFPv2          },
-    { ANDROID_CPU_ARM_FEATURE_VFP_D32       , msgVFP_D32        },
-    { ANDROID_CPU_ARM_FEATURE_VFP_FP16      , msgVFP_FP16       },
-    { ANDROID_CPU_ARM_FEATURE_VFP_FMA       , msgVFP_FMA        },
-    { ANDROID_CPU_ARM_FEATURE_NEON_FMA      , msgNEON_FMA       },
-    { ANDROID_CPU_ARM_FEATURE_IDIV_ARM      , msgIDIV_ARM       },
-    { ANDROID_CPU_ARM_FEATURE_IDIV_THUMB2   , msgIDIV_THUMB2    },
-    { ANDROID_CPU_ARM_FEATURE_iWMMXt        , msgiWMMXt         },
-    { ANDROID_CPU_ARM_FEATURE_AES           , msgAES            },
-    { ANDROID_CPU_ARM_FEATURE_PMULL         , msgPMULL          },
-    { ANDROID_CPU_ARM_FEATURE_SHA1          , msgSHA1           },
-    { ANDROID_CPU_ARM_FEATURE_SHA2          , msgSHA2           },
-    { ANDROID_CPU_ARM_FEATURE_CRC32         , msgCRC32          }
+/*@unchecked@*/
+static const T_CpuFeatureInfo s_allFeatures[] = {
+    {(uint64_t) ANDROID_CPU_ARM_FEATURE_ARMv7         , k_msgARMv7          },
+    {(uint64_t) ANDROID_CPU_ARM_FEATURE_VFPv3         , k_msgVFPv3          },
+    {(uint64_t) ANDROID_CPU_ARM_FEATURE_NEON          , k_msgNEON           },
+    {(uint64_t) ANDROID_CPU_ARM_FEATURE_LDREX_STREX   , k_msgLDREX_STREX    },
+    {(uint64_t) ANDROID_CPU_ARM_FEATURE_VFPv2         , k_msgVFPv2          },
+    {(uint64_t) ANDROID_CPU_ARM_FEATURE_VFP_D32       , k_msgVFP_D32        },
+    {(uint64_t) ANDROID_CPU_ARM_FEATURE_VFP_FP16      , k_msgVFP_FP16       },
+    {(uint64_t) ANDROID_CPU_ARM_FEATURE_VFP_FMA       , k_msgVFP_FMA        },
+    {(uint64_t) ANDROID_CPU_ARM_FEATURE_NEON_FMA      , k_msgNEON_FMA       },
+    {(uint64_t) ANDROID_CPU_ARM_FEATURE_IDIV_ARM      , k_msgIDIV_ARM       },
+    {(uint64_t) ANDROID_CPU_ARM_FEATURE_IDIV_THUMB2   , k_msgIDIV_THUMB2    },
+    {(uint64_t) ANDROID_CPU_ARM_FEATURE_iWMMXt        , k_msgiWMMXt         },
+    {(uint64_t) ANDROID_CPU_ARM_FEATURE_AES           , k_msgAES            },
+    {(uint64_t) ANDROID_CPU_ARM_FEATURE_PMULL         , k_msgPMULL          },
+    {(uint64_t) ANDROID_CPU_ARM_FEATURE_SHA1          , k_msgSHA1           },
+    {(uint64_t) ANDROID_CPU_ARM_FEATURE_SHA2          , k_msgSHA2           },
+    {(uint64_t) ANDROID_CPU_ARM_FEATURE_CRC32         , k_msgCRC32          },
 };
 
 
-static AndroidCpuFamily m_cpuFamily;
-static uint64_t m_cpuFeatures;
-static int m_cpuCount;
+static AndroidCpuFamily s_cpuFamily;
+static uint64_t s_cpuFeatures;
+static int s_cpuCount;
 
 
 
-void printCpuFamily(AndroidCpuFamily f)
+static void printCpuFamily(AndroidCpuFamily f)
 {
     const char *msg = "UNKNOWN";
     switch (f) {
@@ -141,23 +146,23 @@ void printCpuFamily(AndroidCpuFamily f)
     return;
 }
 
-const char *getOneCpuFeatures(int index, uint64_t k)
+static const char *getOneCpuFeatures(int index, uint64_t k)
 {
-    const int max = sizeof(allFeatures)/sizeof(allFeatures[0]);
-    if (index <= max && allFeatures[index].featureKey == k) {
-        return allFeatures[index].featureMsg;
+    const int max = (int)(sizeof(s_allFeatures)/sizeof(s_allFeatures[0]));
+    if (index <= max && s_allFeatures[index].featureKey == k) {
+        return s_allFeatures[index].featureMsg;
     }
     return NULL;
 }
 
-void printfCpuFeatures(uint64_t feature)
+static void printfCpuFeatures(uint64_t feature)
 {
     int i = 0;
     uint64_t mask = 0;
     printf("Cpu Features List : (Comment Copy from cpu-features.h)\n");
     for (i = 0; i < MAX_FEATURE_NUM; i++) {
-        mask = 0x01 << i;
-        if (feature & mask) {
+        mask = (uint64_t)(0x01 << i);
+        if ((feature & mask) != 0) {
             const char *msg = getOneCpuFeatures(i, mask);
             if (msg != NULL) {
                 printf("%s\n\n", msg);
@@ -166,20 +171,24 @@ void printfCpuFeatures(uint64_t feature)
     }
 }
 
-void printfCpuCount(int n)
+static void printfCpuCount(int n)
 {
     printf("%d processor\n", n);
 }
 
-int main(int argc,char *argv[])
+int main
+(
+	/*@unused@*/int argc,
+	/*@unused@*/char *argv[]
+)
 {
     printf("Welcome To Cpu Word\n");
-    m_cpuFamily = android_getCpuFamily();
-    m_cpuCount = android_getCpuCount();
-    printCpuFamily(m_cpuFamily);
-    printfCpuCount(m_cpuCount);
-    m_cpuFeatures = android_getCpuFeatures();
-    printfCpuFeatures(m_cpuFeatures);
+    s_cpuFamily = android_getCpuFamily();
+    s_cpuCount = android_getCpuCount();
+    printCpuFamily(s_cpuFamily);
+    printfCpuCount(s_cpuCount);
+    s_cpuFeatures = android_getCpuFeatures();
+    printfCpuFeatures(s_cpuFeatures);
     return 0;
 }
 
